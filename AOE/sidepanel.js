@@ -10,9 +10,30 @@ function loadIframe() {
     if (data.savedIframeUrl) {
       console.log("Loading sidebar URL:", data.savedIframeUrl);
       webview.src = data.savedIframeUrl;
+      webview.style.display = 'block';
+      const configMsg = document.getElementById('config-message');
+      if (configMsg) configMsg.remove();
     } else {
-      // If not configured, provide a default value or hint
-      webview.srcdoc = "<h3>Please configure the URL in the extension options first.</h3>";
+      webview.style.display = 'none';
+      if (!document.getElementById('config-message')) {
+        const div = document.createElement('div');
+        div.id = 'config-message';
+        div.style.padding = '20px';
+        div.style.textAlign = 'center';
+        div.innerHTML = `
+          <h3>Welcome to AOE</h3>
+          <p>Please configure your Open WebUI URL to get started.</p>
+          <button id="openOptionsBtn" class="btn" style="background: var(--accent-blue); margin-top: 10px; width: 100%;">Open Options</button>
+        `;
+        document.body.appendChild(div);
+        document.getElementById('openOptionsBtn').addEventListener('click', () => {
+          if (chrome.runtime.openOptionsPage) {
+            chrome.runtime.openOptionsPage();
+          } else {
+            window.open(chrome.runtime.getURL('options.html'));
+          }
+        });
+      }
     }
   });
 };
@@ -26,81 +47,109 @@ refreshBtn.addEventListener('click', () => {
 });
 
 pasteBtn.addEventListener('click', async () => {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab) return;
+  const originalHTML = pasteBtn.innerHTML;
+  pasteBtn.textContent = "Processing...";
+  pasteBtn.disabled = true;
 
-  const results = await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    func: () => {
-      const tagsToRemove = [
-        'SCRIPT', 'STYLE', 'NOSCRIPT', 'IFRAME', 'CANVAS', 'SVG',
-        'HEADER', 'FOOTER', 'NAV', 'TEXTAREA', 'SELECT', 'APPLET', 'MAP'
-      ];
-      const indentSymbol = "\t"; // Indentation symbol, can be changed to "\t" or "    "
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab) throw new Error("No active tab");
 
-      // 2. Function to check if an element is visible
-      const isVisible = (el) => {
-        if (!el || el.nodeType !== Node.ELEMENT_NODE) return true;
-        const style = window.getComputedStyle(el);
-        return style.display !== 'none' &&
-               style.visibility !== 'hidden' &&
-               style.opacity !== '0' &&
-               el.offsetWidth > 0 &&
-               el.offsetHeight > 0;
-      };
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => {
+        const tagsToRemove = [
+          'SCRIPT', 'STYLE', 'NOSCRIPT', 'IFRAME', 'CANVAS', 'SVG',
+          'HEADER', 'FOOTER', 'NAV', 'TEXTAREA', 'SELECT', 'APPLET', 'MAP'
+        ];
+        const indentSymbol = "\t"; // Indentation symbol, can be changed to "\t" or "    "
 
-      // Recursive processing function
-      function processNode(node, depth) {
-        // 1. Filter out unwanted tags or invisible elements
-        if ((node.nodeType === Node.ELEMENT_NODE && tagsToRemove.includes(node.tagName)) || !isVisible(node)) {
-          return [];
+        // 2. Function to check if an element is visible
+        const isVisible = (el) => {
+          if (!el || el.nodeType !== Node.ELEMENT_NODE) return true;
+          const style = window.getComputedStyle(el);
+          return style.display !== 'none' &&
+                 style.visibility !== 'hidden' &&
+                 style.opacity !== '0' &&
+                 el.offsetWidth > 0 &&
+                 el.offsetHeight > 0;
+        };
+
+        // Recursive processing function
+        function processNode(node, depth) {
+          // 1. Filter out unwanted tags or invisible elements
+          if ((node.nodeType === Node.ELEMENT_NODE && tagsToRemove.includes(node.tagName)) || !isVisible(node)) {
+            return [];
+          }
+
+          let lines = [];
+
+          // 2. Process direct text child nodes of the current node
+          // Extract text belonging directly to the current element to avoid duplication
+          let directText = "";
+          node.childNodes.forEach(child => {
+            if (child.nodeType === Node.TEXT_NODE) {
+              const text = child.textContent.trim();
+              if (text) directText += (directText ? " " : "") + text;
+            }
+          });
+
+          // 3. If the current node has text, apply indentation rules and add to array
+          if (directText) {
+            // Clean up redundant spaces in text
+            const cleanedText = directText.replace(/[ \t]{2,}/g, ' ');
+            lines.push(cleanedText);
+          }
+
+          // 4. Recursively process child elements (excluding text nodes, handled above)
+          node.childNodes.forEach(child => {
+            if (child.nodeType === Node.ELEMENT_NODE) {
+              lines.push(...processNode(child, depth + 1));
+            }
+          });
+
+          return lines;
         }
 
-        let lines = [];
+        // Start recursion from body, body defined as depth 0
+        const allLines = processNode(document.body, 0);
 
-        // 2. Process direct text child nodes of the current node
-        // Extract text belonging directly to the current element to avoid duplication
-        let directText = "";
-        node.childNodes.forEach(child => {
-          if (child.nodeType === Node.TEXT_NODE) {
-            const text = child.textContent.trim();
-            if (text) directText += (directText ? " " : "") + text;
-          }
-        });
-
-        // 3. If the current node has text, apply indentation rules and add to array
-        if (directText) {
-          // Clean up redundant spaces in text
-          const cleanedText = directText.replace(/[ \t]{2,}/g, ' ');
-          lines.push(cleanedText);
-        }
-
-        // 4. Recursively process child elements (excluding text nodes, handled above)
-        node.childNodes.forEach(child => {
-          if (child.nodeType === Node.ELEMENT_NODE) {
-            lines.push(...processNode(child, depth + 1));
-          }
-        });
-
-        return lines;
+        // 5. Final merge
+        return allLines.join('\n');
       }
+    });
 
-      // Start recursion from body, body defined as depth 0
-      const allLines = processNode(document.body, 0);
+    if (!results || !results[0]) throw new Error("Script execution failed");
 
-      // 5. Final merge
-      return allLines.join('\n');
-    }
-  });
+    const extractedText = results[0].result;
+    // Send to the iframe inside the sidebar
 
-  const extractedText = results[0].result;
-  // Send to the iframe inside the sidebar
+    webview.contentWindow.postMessage({ type: 'EXECUTE_PASTE',contentType: 'text', data: extractedText }, '*');
+    
+    pasteBtn.textContent = "Copied!";
+    setTimeout(() => {
+      pasteBtn.innerHTML = originalHTML;
+      pasteBtn.disabled = false;
+    }, 1500);
 
-  webview.contentWindow.postMessage({ type: 'EXECUTE_PASTE',contentType: 'text', data: extractedText }, '*');
+  } catch (err) {
+    console.error(err);
+    pasteBtn.textContent = "Error!";
+    pasteBtn.style.backgroundColor = "#ef4444";
+    setTimeout(() => {
+      pasteBtn.innerHTML = originalHTML;
+      pasteBtn.disabled = false;
+      pasteBtn.style.backgroundColor = "";
+    }, 2000);
+  }
 });
 
 // 2. Insert Screen
 screenBtn.addEventListener('click', async () => {
+  const originalHTML = screenBtn.innerHTML;
+  screenBtn.textContent = "Capturing...";
+  screenBtn.disabled = true;
+
   try {
     // capture screen
     const dataUrl = await chrome.tabs.captureVisibleTab(null, { format: 'png' });
@@ -111,7 +160,21 @@ screenBtn.addEventListener('click', async () => {
       contentType: 'image', 
       data: dataUrl 
     }, '*');
+
+    screenBtn.textContent = "Sent!";
+    setTimeout(() => {
+      screenBtn.innerHTML = originalHTML;
+      screenBtn.disabled = false;
+    }, 1500);
+
   } catch (e) {
     console.error("Screenshot failed", e);
+    screenBtn.textContent = "Error!";
+    screenBtn.style.backgroundColor = "#ef4444";
+    setTimeout(() => {
+      screenBtn.innerHTML = originalHTML;
+      screenBtn.disabled = false;
+      screenBtn.style.backgroundColor = "";
+    }, 2000);
   }
 });
