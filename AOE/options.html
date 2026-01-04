@@ -1,23 +1,180 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Config Page</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AOE Settings</title>
   <style>
-    body { padding: 20px; font-family: sans-serif; }
-    input { width: 300px; padding: 5px; }
-    button { margin-top: 10px; padding: 5px 15px; cursor: pointer; }
-    .status { color: green; margin-top: 10px; }
+    :root {
+      --bg-color: #0f172a;
+      --card-bg: #1e293b;
+      --input-bg: #334155;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-blue: #3b82f6;
+      --accent-hover: #2563eb;
+      --success: #22c55e;
+      --error: #ef4444;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      margin: 0;
+      padding: 40px 20px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 600px;
+      background: var(--card-bg);
+      padding: 30px;
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    }
+
+    h1 {
+      margin: 0 0 10px 0;
+      font-size: 24px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      margin-bottom: 30px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .form-group {
+      margin-bottom: 25px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .description {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 12px;
+      background: var(--input-bg);
+      border: 1px solid transparent;
+      border-radius: 8px;
+      color: white;
+      font-size: 14px;
+      box-sizing: border-box;
+      transition: all 0.2s;
+    }
+
+    input[type="text"]:focus {
+      outline: none;
+      border-color: var(--accent-blue);
+      background: #475569;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      background: var(--accent-blue);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    button:hover {
+      background: var(--accent-hover);
+    }
+
+    .status {
+      margin-top: 15px;
+      text-align: center;
+      font-size: 14px;
+      min-height: 20px;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .status.success { color: var(--success); opacity: 1; }
+    .status.error { color: var(--error); opacity: 1; }
+
+    .guide {
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .guide h3 {
+      font-size: 16px;
+      margin-bottom: 15px;
+    }
+
+    .guide ul {
+      padding-left: 20px;
+      color: var(--text-muted);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    code {
+      background: rgba(0,0,0,0.3);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+      color: #e2e8f0;
+    }
   </style>
 </head>
 <body>
-    <h2>OpenWebUI URL:</h2>
-    <input type="text" id="iframeUrl" placeholder="http://xxx.xxx.xx.xxx">
-  <h2>Target Match URL:</h2>
-  <input type="text" id="targetUrl" placeholder="http://xxx.xxx.xx.xxx/*">
-  <br>
-  <button id="save">save</button>
-  <div id="status" class="status"></div>
+  <div class="container">
+    <h1>
+      <svg style="width:24px; height:24px; fill:var(--accent-blue)" viewBox="0 0 24 24">
+        <path d="M12 2L4.5 20.29L5.21 21L12 18L18.79 21L19.5 20.29L12 2Z"/>
+      </svg>
+      AOE Configuration
+    </h1>
+    <p class="subtitle">Configure your Open WebUI instance to start using AI everywhere.</p>
+
+    <div class="form-group">
+      <label for="iframeUrl">Open WebUI URL</label>
+      <div class="description">The full URL of your Open WebUI instance (e.g., <code>https://chat.example.com/</code>).</div>
+      <input type="text" id="iframeUrl" placeholder="https://your-open-webui-instance.com/">
+    </div>
+
+    <div class="form-group">
+      <label for="targetUrl">Target Match URL</label>
+      <div class="description">The URL pattern where the extension should have permission to inject scripts. Usually the same as above with <code>*</code> at the end.</div>
+      <input type="text" id="targetUrl" placeholder="https://your-open-webui-instance.com/*">
+    </div>
+
+    <button id="save">Save Configuration</button>
+    <div id="status" class="status"></div>
+
+    <div class="guide">
+      <h3>Quick Guide</h3>
+      <ul>
+        <li><strong>Open WebUI URL:</strong> This is the address you use to access Open WebUI in your browser. You can also append <code>?model=your-model</code> to set a default model.</li>
+        <li><strong>Target Match URL:</strong> This is required for the extension to communicate with your Open WebUI instance. It must end with <code>/*</code> to match all sub-paths.</li>
+      </ul>
+    </div>
+  </div>
 
   <script src="options.js"></script>
 </body>
